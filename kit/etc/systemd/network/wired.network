@@ -1,0 +1,13 @@
+[Match]
+Name=eth0
+
+[Network]
+Address=192.168.1.131/24
+Gateway=192.168.1.4
+
+[ROUTE]
+Metric=0
+
+
+[DHCP]
+RouteMetric=10

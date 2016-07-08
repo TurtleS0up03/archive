@@ -1,0 +1,15 @@
+hdmi_force_hotplug=1
+config_hdmi_boost=4
+overscan_left=24
+overscan_right=24
+overscan_top=16
+overscan_bottom=16
+disable_overscan=0
+core_freq=550
+sdram_freq=500
+over_voltage=6
+gpu_mem=256
+start_x=1
+disable_camera_led=1
+decode_MPG2=0x47e849f9
+decode_WVC1=0x3cfd4586

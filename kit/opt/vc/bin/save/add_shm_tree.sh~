@@ -1,0 +1,4 @@
+#!/bin/sh
+mkdir -p /dev/shm/mjpeg
+chown apache:apache /dev/shm/mjpeg
+exit 0

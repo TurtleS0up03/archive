@@ -1,0 +1,171 @@
+#!/bin/bash
+
+# Sends sound file play requests to listening Windows machines across UDP
+
+VER=0.1
+VERDATE="2010-11-30"
+
+# LAN broadcast address and port to send on
+BCAST=192.168.1.255
+PORT=60606
+
+# Directory where sounds should be scanned for
+# The test statement falls back to /usr/share/sounds if SCANDIR
+# does not exist.
+SCANDIR=$HOME/media
+test ! -e "$SCANDIR" && SCANDIR="/usr/share/sounds/purple"
+
+# For listen mode, the name of the playback command
+# You can also substitute e.g. the "beep" command if you want.
+PLAYCMD="play "
+#PLAYCMD="beep -f 600 -l 100"
+
+# Set NetBIOS name for UNC path translations to this host's name
+SERVER=$(hostname)
+
+# Assume first parameter is a sound file; we can change this later.
+SNDFILE="$1"
+
+# If quiet mode is requested, parameter 2 is the sound file
+# Set Q=1 if quiet mode
+Q=0; test "$1" = "-q" && Q=1 && SNDFILE="$2"
+
+# Listen mode.
+if [ "$1" = "-l" ]
+  then echo -e "\nsnd2remote, a remote sound tool, version $VER ($VERDATE)"
+  echo "Copyright (C) by Jody Bruchon. Licensed under GNU GPLv3."
+  echo "Listening for sound events on UDP port: $PORT"
+
+  # Listening loop. Try to translate bad file specs to a local file
+  # before giving up.
+  # socat option details as used here:
+  # -u makes the communication unidirectional (prevents errors)
+  # udp4-recvfrom endpoint type receives one packet and immediately
+  # exits (since it is unidirectional) so no timeout is needed
+  # The hyphen indicates the packet should output to stdout.
+  while true;
+    do SNDFILE=$(socat -u udp4-recvfrom:$PORT -)
+echo $SNDFILE
+    # Translate backslashes and remove drive letter specs
+    SNDFILE="$(echo "$SNDFILE" | sed 's.\\./.g')"
+echo $SNDFILE
+    if [ "$(echo "$SNDFILE" | head -c2 | tail -c1)" = ":" ]
+      then SNDFILE="$(echo "$SNDFILE" | tail -c+2)"
+    fi
+echo $SNDFILE
+    if [ ! -e "$SNDFILE" ]
+      then echo "Not found in /home/mythtv: $SNDFILE"
+      # Attempt to locate a copy of the sound file locally
+      F=0
+      SNDNAME="$(basename "$SNDFILE")"
+      SCANRES="$(find "$SCANDIR" | grep -m 1 "$SNDNAME")"
+
+      # See if find command located a valid file
+      test -e "$SCANRES" && SNDFILE="$SCANRES" && \
+        echo "Scandir scan found $SNDFILE"
+
+      # Check current user's home directory
+      USERNAME=$(whoami)
+      HOMETEST="/home/$USERNAME/$SNDNAME"
+#      test -e "$HOMETEST" && SNDFILE="$HOMETEST" && \
+#       echo "Home search found $SNDFILE"
+
+      # Cut UNC path and try it on a local home directory
+#      if echo "$SNDFILE" | head -c 2 | grep -q '//'
+#        then UNCPATH="/home/$(echo "$SNDFILE" | cut -d/ -f4-)"
+#        if [ -e "$UNCPATH" ]
+#          then SNDFILE="$UNCPATH"
+#          echo "UNC search found $SNDFILE"
+#          else echo "Scans failed to locate $SNDNAME (not playing)"
+#          continue
+#        fi
+#      fi
+    fi
+    test -e "$SNDFILE" && echo "Playing $SNDFILE" && $PLAYCMD "$SNDFILE" &&sleep 3
+  done
+  echo "Error: loop was broken, terminating."; exit 3
+fi
+
+# Help text
+if [ "$SNDFILE" = "" ]
+  then if [ "$Q" = "0" ]
+    then echo -e "\nsnd2remote, a remote sound tool, version $VER ($VERDATE)"
+    echo "Copyright (C) by Jody Bruchon. Licensed under GNU GPLv3."
+    echo -e "\nUsage: snd2remote [-l] [-q] sound-to-play.wav\n"
+    echo "This program translates path names in the format /home/user/file to UNC paths,"
+    echo "such as \\hostname\user\file"
+    echo
+    echo "-l  listen mode: receive and play sound events"
+    echo "-q  silences all output (useful for not polluting terminals!)"
+    echo
+    echo "Files on the remote machine can be played by specifying their full path (such"
+    echo "as /WINDOWS/Media/ding.wav), while servers which the Windows user has access"
+    echo "to can be specified by UNC path (i.e. //server/share/path/file.wav). Slashes"
+    echo "are converted to backslashes before being sent for your convenience."
+    echo
+    echo "Files stored on the local machine are assumed to be unplayable and will"
+    echo "return an error condition when detected."
+    echo
+  fi
+  exit 1
+fi
+
+test "$Q" = "0" && echo -n "snd2remote: Trying $SNDFILE: "
+
+# Checks for an attempt to play a local file outside of a user's home
+# folder. This program assumes that Samba is running on this server
+# and sharing homes, but that any other local file is not readable by
+# the Windows machine, and therefore not playable.
+if [ -e "$SNDFILE" ]
+  then if ! echo "$SNDFILE" | head -c 6 | grep -q "/home/"
+    then if [ -e "$SNDFILE" ]
+      then test "$Q" = "0" && echo "can't play non-home local files."
+      exit 2
+    fi
+  fi
+fi
+
+# If the sound file exists (since it passed the home dir test earlier)
+# then it will require translation to a UNC path for the Windows
+# machine to find the sound and play it back. If it doesn't exist,
+# it is assumed that a valid Windows path is being passed and the
+# path is not translated.
+if [ -e "$SNDFILE" ]
+  then test "$Q" = "0" && echo -n "translating, "
+  SNDFILE=$(echo -n "$SNDFILE" | sed 's./home/.\\\\'${SERVER}'\\.')
+  else test "$Q" = "0" && echo -n "not translating, "
+fi
+
+# This translates forward slashes in the path to backslashes for
+# Windows so it doesn't get grouchy on us and fail to play :(
+SNDFILE=$(echo -n "$SNDFILE" | sed 's./.\\.g')
+
+# Some comments on the usage of socat here for people who are not
+# familiar with it and how it works:
+#
+# socat is like a fancy pipe. It bidirectionally pushes data between
+# the first and second "endpoint type" passed to it on the command
+# line.  In this case, we are using a hyphen "-" as the first endpoint
+# which means "standard input" and lets socat take the sound file name
+# from the echo command being piped into it. The second endpoint is
+# more complicated because it is basically a UDP broadcast endpoint.
+# udp4-sendto tells socat to send out data on an IPv4 UDP port.
+#
+# The format is: udp4-sendto:IP_ADDRESS:PORT[,options]
+#
+# We use a broadcast address and port configurable at the top of this file.
+# The ",broadcast" option is required when using broadcast addresses
+# so we don't get "permission denied" errors, which is why netcat
+# can't be used here (it doesn't support setting this option)
+#
+# The socat option "-u" makes socat "left-to-right unidirectional"
+# which prevents socat from sending a SIGTSTP signal to the calling
+# program (freezing it up). The "-T1" is not strictly necessary, but
+# it is included for paranoia; it sets a timeout period of 1 second.
+
+test "$Q" = "0" && echo -n "sending..."
+echo -n "$SNDFILE" | \
+  socat -u -T1 - udp4-sendto:${BCAST}:${PORT},broadcast || exit 2
+test "$Q" = "0" && echo "done."
+
+# End of file.

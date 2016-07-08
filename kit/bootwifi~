@@ -1,0 +1,268 @@
+***********kill that stupid NetworkManager it will fuck with wifi*****************
+systemctl stop NetworkManager.service
+systemctl disable NetworkManager.service
+=================================================================
+iw dev
+ip link show wlan0
+ip link set wlan0 up
+iw wlan0 link
+iw wlan0 scan
+[1;37;42mwpa_supplicant -B -D wext -i wlan0 -c /etc/wpa_supplicant/wpa_supplicant.conf[0m 
+iw wlan0 link
+dhclient wlan0
+ifconfig
+ip addr show wlan0
+ip route show
+ping 8.8.8.8
+history >bootwifi
+
+==========================================
+this is my working wpa_supplicamt.conf
+ctrl_interface=/var/run/wpa_supplicant
+ctrl_interface_group=wheel
+network={
+    ssid="jasper"
+    psk="bearhawkpatrol"
+}
+
+or here is another one from my routers   /etc/wpa_supplicant/wpa_supplicant.conf
+ctrl_interface=/var/run/wpa_supplicant
+ap_scan=1
+fast_reauth=1
+
+network={
+	ssid="Audi"
+	#psk="jasperbuddyrockyzoe"
+	psk=a6108711f924f4ada969d9912ae862d82a0da31cd199c111a12e574754782f3a
+}
+
+
+
+this is what i get if i use the supplied command it does not work
+
+[root@inspiron mythtv]#wpa_passphrase jasper
+
+
+# reading passphrase from stdin
+network={
+	ssid="jasper"
+	#psk="bearhawkpatrol"
+	psk=e5248ff6bf5ad41735479236a1aa001afbb7cfc97d6bbcf5efcc59a0a033732f
+}
+
+[1;37;42mwpa_passphrase Audi >/etc/wpa_supplicant/wpa_supplicant.conf[0m
+
+[1;31m====================================================================[0m
+[1;31m=================VVVVVVVVVVVVVVVVVVVVVVV============================[0m
+[1;31m====================================================================[0m
+proper route
+route -n 
+Kernel IP routing table
+Destination     Gateway         Genmask         Flags Metric Ref    Use Iface
+0.0.0.0         192.168.1.4     0.0.0.0         UG    0      0        0 wlan0
+192.168.1.0     0.0.0.0         255.255.255.0   U     0      0        0 wlan0
+
+BRUTE FORCE
+route add -net 192.168.1.0 netmask 255.255.255.0 wlan0 
+route add -net 192.168.1.0/24  wlan0 [1;32;41mSAME AS ABOVE[0m
+
+
+[1;32;101m
+lower the priority of the wlan0 interface
+route add  default gw 192.168.1.4  dev  wlan0  metric 1
+route del default gw 192.168.1.4 dev wlan0 metric 0
+route add -net 192.168.1.0/24  wlan0 metric 1
+route del -net 192.168.1.0/24  wlan0 metric 0
+[39;49m
+[0m
+[1;32;104m	
+route del default gw 192.168.1.4 dev em1 metric 0              delete gateway
+route del -net 192.168.1.0/24 dev em1 metric 0                 delete network
+
+route add -host 192.168.1.1/[1;4;31m32[0m[1;32;104m dev em1                         assign em1 dedicated direct connect to router
+
+route -n
+Kernel IP routing table
+Destination     Gateway         Genmask         Flags Metric Ref    Use Iface
+0.0.0.0         192.168.1.4     0.0.0.0         UG    0      0        0 wlan0
+192.168.1.0     0.0.0.0         255.255.255.0   U     1      0        0 wlan0
+192.168.1.1     0.0.0.0         255.255.255.255 UH    0      0        0 em1       <================  this is the host (router)
+192.168.122.0   0.0.0.0         255.255.255.0   U     0      0        0 virbr0
+
+
+if it does not ping 192.168.1.1 try another address 
+route del -host 192.168.1.1/[1;4;31m32[1;32;104m dev em1                         delete previous em1 direct connect
+route add -host 192.168.1.3/[1;4;31m32[1;32;104m dev em1                         assign em1 dedicated direct connect to router
+
+
+[39;49m
+
+
+[34m[43mI HAVE A NEED FOR SPEED[0m[34m[41m Or, wifi not associated and want ethernet to have high priority route[0m
+[root@zoe2 mythtv]# route add -net 192.168.1.0/24  dev wlan0 metric 1
+[root@zoe2 mythtv]# route del -net 192.168.1.0/24  dev wlan0 metric 0
+[root@zoe2 mythtv]# route add -net default gw 192.168.1.4 netmask 0.0.0.0 dev wlan0 metric 1
+[root@zoe2 mythtv]# route del -net default gw 192.168.1.4 netmask 0.0.0.0 dev wlan0 metric 0
+
+[1;31m====================================================================[0m
+[1;31m===================^^^^^^^^^^^^^^^^^^^==============================[0m
+[1;31m====================================================================[0m
+
+IF YOU CAN ping 8.8.8.8 but 
+YOU CAN not ping drudgereport.com
+then your /etc/resolv.conf is messed up 
+
+it should be something like
+nameserver 192.168.1.4
+  
+
+or maybe 
+nameserver 209.18.47.61
+============[1;37;41mCREATE CERTIFICATE[0m==============================
+============[1;37;41mCREATE CERTIFICATE[0m==============================
+============[1;37;41mCREATE CERTIFICATE[0m==============================
+============[1;37;41mCREATE CERTIFICATE[0m==============================
+FROM man systemd-journal-upload I got these instructions
+[1;37;47m
+mkdir /home/mythtv/something
+cd /home/mythtv/something
+openssl req -newkey rsa:2048 -days 3650 -x509 -nodes                  -out ca.pem -keyout ca.key -subj '/CN=Certificate authority/'
+
+[1;37;46m
+
+cat >ca.conf <<EOF
+[ ca ]
+default_ca = this
+
+[ this ]
+new_certs_dir = .
+certificate = ca.pem
+database = ./index
+private_key = ca.key
+serial = ./serial
+default_days = 3650
+default_md = default
+policy = policy_anything
+
+[ policy_anything ]
+countryName             = optional
+stateOrProvinceName     = optional
+localityName            = optional
+organizationName        = optional
+organizationalUnitName  = optional
+commonName              = supplied
+emailAddress            = optional
+EOF
+
+[0m
+
+
+
+
+
+
+[1;37;42m
+touch index
+echo 0001 > serial
+SERVER=kitchen
+CLIENT=zoe
+[0m
+
+
+[1;34;41mopenssl req -newkey rsa:1024 -nodes -out $SERVER.csr -keyout $SERVER.key -subj "/CN=$SERVER/"
+openssl ca -batch -config ca.conf -notext -in $SERVER.csr -out $SERVER.pem
+openssl req -newkey rsa:1024 -nodes -out $CLIENT.csr -keyout $CLIENT.key -subj "/CN=$CLIENT/"
+openssl ca -batch -config ca.conf -notext -in $CLIENT.csr -out $CLIENT.pem
+[0m	   
+
+[1;37;45m
+scp $CLIENT.key root@$CLIENT:/etc/pki/tls/private/journal-upload.key
+scp $SERVER.key root@$SERVER:/etc/pki/tls/private/journal-remote.key
+
+scp $CLIENT.pem root@$CLIENT:/etc/pki/tls/certs/journal-upload.pem
+scp $SERVER.pem root@$SERVER:/etc/pki/tls/certs/journal-remote.pem
+
+
+scp ca.pem root@$CLIENT:/etc/pki/CA/trusted.pem
+scp ca.pem root@$SERVER:/etc/pki/CA/trusted.pem
+[0m
+[1;37;46m
+echo -e 'URL=kitchen'|ssh root@$CLIENT tee -a /etc/systemd/journal-upload.conf
+[0m
+
+you can double check the file on zoe it should be
+[root@zoe systemd]# cat journal-upload.conf
+[Upload]
+# URL=
+# ServerKeyFile=/etc/ssl/private/journal-upload.pem
+# ServerCertificateFile=/etc/ssl/certs/journal-upload.pem
+# TrustedCertificateFile=/etc/ssl/ca/trusted.pem
+URL=kitchen
+
+
+
+
+i think it a good time to make sure that /etc/hosts contains
+192.168.1.457 kitchen
+
+=============
+[1;37;49m
+firewall stuff on server kitchen (assuming you do not have graphical interface and want to do it on command line)
+[root@kitchen systemd]# firewall-cmd  --add-port=19532/tcp
+[root@kitchen systemd]# firewall-cmd --permanent --add-port=19532/tcp
+
+double check
+[root@kitchen systemd]# iptables --list|grep 19532
+ACCEPT     tcp  --  anywhere             anywhere             tcp dpt:19532 ctstate NEW
+[0m
+=====
+
+one last double check on server to make sure it was not in some unknown state
+[root@kitchen systemd]# cat /etc/systemd/journal-remote.conf
+[Remote]
+# SplitMode=host
+ServerKeyFile=/etc/pki/tls/private/journal-remote.key
+ServerCertificateFile=/etc/pki/tls/certs/journal-remote.pem
+TrustedCertificateFile=/etc/pki/CA/trusted.pem
+
+
+on server there is a directory /etc/httpd/conf.d
+in that directory is a ssl.conf
+I changed two lines in that file
+
+SSLCertficatefile /etc/pki/tls/certs/journal-remote.pem
+SSLCertficateKeyfile /etc/pki/tls/private/journal-remote.key
+
+===========
+
+also on the server /etc/systemd/journal-remote.conf
+[root@kitchen systemd]# cat journal-remote.conf
+[Remote]
+# SplitMode=host
+ServerKeyFile=/etc/pki/tls/private/journal-remote.key
+ServerCertificateFile=/etc/pki/tls/certs/journal-remote.pem
+TrustedCertificateFile=/etc/pki/CA/trusted.pem
+[39mDefault[0m		[49mDefault[0m	   
+[30mBlack[0m		[40mBlack[0m	   	
+[31mRed[0m		[1;32;41mRed[0m		   
+[32mGreen[0m		[1;31;42mGreen[0m	   
+[33mYellow[0m		[1;34;43mYellow[0m	   
+[34mBlue[0m		[1;33;44mBlue[0m		   
+[35mMagenta[0m		[1;45mMagenta[0m	   
+[36mCyan[0m		[46mCyan[0m		   
+[37mLight gray[0m	[47mLight gray[0m	   
+[90mDark gray[0m	[100mDark gray[0m	   	
+[91mLight red[0m	[101mLight red[0m	   
+[92mLight green[0m	[102mLight green[0m	   
+[93mLight yellow[0m	[103mLight yellow[0m   
+[94mLight blue[0m	[104mLight blue[0m	   
+[95mLight magenta[0m	[105mLight magenta[0m  	
+[96mLight cyan[0m	[106mLight cyan[0m	   
+[97mWhite[0m		[107mWhite[0m	   
+
+[31;1mBOLD[0;21m          
+[32;2mDIM[0;22m        
+[34;4munderline[0;24m         
+[34;5mBlINK[0;25m         
+
+
